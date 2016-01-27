@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <gcrypt.h>
+#include <string.h>
 
 #include "dh.h"
 #include "privkeydh.h"
@@ -152,13 +153,39 @@ gcry_error_t tripledh_handshake_encrypt(TripleDH_handshake *hs,
  */
 gcry_error_t tripledh_handshake_decrypt(TripleDH_handshake *hs,
                                         unsigned char *out, size_t outsize,
-                                        const unsigned *in, size_t inlen)
+                                        const unsigned char *in, size_t inlen)
 {
     gcry_error_t err;
     err = gcry_cipher_decrypt(hs->state.rcvenc, out, outsize, in, inlen);
     return err;
 }
 
+
+gcry_error_t tripledh_handshake_mac(TripleDH_handshake *hs,
+                                    unsigned char *out, const unsigned char *in,
+                                    size_t inlen)
+{
+    if (!in) {
+        debug_msg("inline mac'ing not yet implemented");
+        return gcry_error(GPG_ERR_NOT_IMPLEMENTED);
+    }
+    gcry_md_reset(hs->state.sendmac);
+    gcry_md_write(hs->state.sendmac, in, inlen);
+    memmove(out, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
+}
+
+gcry_error_t tripledh_handshake_mac_verify(TripleDH_handshake *hs,
+                                           unsigned char mac[32],
+                                           unsigned char *msg, size_t msglen)
+{
+    unsigned char my_mac[32];
+
+    gcry_md_reset(hs->state.rcvmac);
+    gcry_md_write(hs->state.rcvmac, msg, msglen);
+    memmove(my_mac, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
+
+    return memcmp(my_mac, mac, 32);
+}
 
 /*
  * This function must be called after all the necessary values are loaded in
@@ -379,9 +406,9 @@ int main(int argc, char **argv)
     size_t written;
     gcry_error_t err;
     unsigned char message[16] = "must be readabl";
-
+    unsigned char mac[32];
     FILE *fp;
-
+    int i;
     TripleDH_handshake hs_a, hs_b;
     DH_keypair *a_keypair, *b_keypair;
 
@@ -436,6 +463,15 @@ int main(int argc, char **argv)
         fprintf(stderr, "something went wrong when encrypting\n");
     fwrite(message, sizeof(unsigned char), 16, stderr);
     fprintf(stderr, "\n");
+    tripledh_handshake_mac(&hs_a, mac, message, 16);
+
+    for(i = 0; i<16; i++)
+        fprintf(stderr, "%02X", mac[i]);
+    fprintf(stderr,"\n");
+
+
+    if(!tripledh_handshake_mac_verify(&hs_b, mac, message,16))
+        fprintf(stderr,"message is not verified");
     err = tripledh_handshake_decrypt(&hs_b, message, 16, NULL, 0);
     if(err)
         fprintf(stderr, "something went wrong when decrypting\n");
