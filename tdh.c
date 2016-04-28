@@ -116,6 +116,7 @@ gcry_error_t tripledh_handshake_gen_ephemeral(TripleDH_handshake *handshake)
 gcry_error_t tripledh_handshake_load_their_pub(TripleDH_handshake *handshake,
         gcry_mpi_t their_long, gcry_mpi_t their_eph)
 {
+    /* Check if both longterm and ephemeral public keys are valid */
     if ( otrl_dh_is_inrange(their_long) ||
            otrl_dh_is_inrange(their_eph) ) {
         /*one of the public keys were out of range */
@@ -123,6 +124,8 @@ gcry_error_t tripledh_handshake_load_their_pub(TripleDH_handshake *handshake,
         return gcry_error(GPG_ERR_INV_VALUE);
     }
     debug_msg("loading pub keys \n");
+
+    /* Just copy the provided public keys in the handshake data */
     handshake->their_pub_long = gcry_mpi_copy(their_long);
     handshake->their_pub_eph  = gcry_mpi_copy(their_eph);
 
@@ -137,6 +140,8 @@ gcry_error_t tripledh_handshake_load_their_pub(TripleDH_handshake *handshake,
  * will be performed in place. Overlapping buffers not allowed.
  * In any case if the function returns with no errors then out will have
  * the encrypted message and outsize will contain its length.
+ *
+ * This is just a wrapper around gcry_cipher_encrypt.
  */
 gcry_error_t tripledh_handshake_encrypt(TripleDH_handshake *hs,
                                         unsigned char *out, size_t outsize,
@@ -150,6 +155,8 @@ gcry_error_t tripledh_handshake_encrypt(TripleDH_handshake *hs,
 /*
  * Decrypts a message using the receiving cipher in hs. Argument values
  * conform to the encryption pattern as above.
+ *
+ * This is just a wrapper around gcry_cipher_decrypt.
  */
 gcry_error_t tripledh_handshake_decrypt(TripleDH_handshake *hs,
                                         unsigned char *out, size_t outsize,
@@ -161,6 +168,12 @@ gcry_error_t tripledh_handshake_decrypt(TripleDH_handshake *hs,
 }
 
 
+/*
+ * Generate the MAC of in using the sending HMAC in hs. The length of the
+ * input is inlen. The MAC is returned in out which must be an allready
+ * allocated buffer. Currently the size of the MAC is hardcoded to be 32
+ * bytes.
+ */
 gcry_error_t tripledh_handshake_mac(TripleDH_handshake *hs,
                                     unsigned char *out, const unsigned char *in,
                                     size_t inlen)
@@ -174,6 +187,10 @@ gcry_error_t tripledh_handshake_mac(TripleDH_handshake *hs,
     memmove(out, gcry_md_read(hs->state.sendmac, GCRY_MD_SHA256), 32);
 }
 
+
+/*
+ * Verify if mac is a valid MAC for msg, using receiving mac from hs
+ */
 gcry_error_t tripledh_handshake_mac_verify(TripleDH_handshake *hs,
                                            unsigned char mac[32],
                                            unsigned char *msg, size_t msglen)
