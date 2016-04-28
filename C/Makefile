@@ -22,7 +22,7 @@ tdh-debug.o: tdh.c
 	gcc -DDEBUG -c tdh.c -o tdh-debug.o
 
 clean :
-	rm *.o
+	rm -f *.o
 
 distclean: clean
 	rm -f libdh.so
